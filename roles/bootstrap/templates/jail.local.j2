@@ -1,0 +1,8 @@
+{{ ansible_managed | comment('c') }}
+
+[sshd]
+enabled   = true
+maxretry  = 3
+findtime  = 1d
+bantime   = 4w
+ignoreip  = {{ f2b_ignoreip | default("127.0.0.1/8") }}

@@ -1,0 +1,127 @@
+---
+    # Stop and disable ufw before installing firewalld ...
+- name: Check if ufw is installed.
+  ansible.builtin.stat:
+    path: /usr/sbin/ufw
+  register: ufw_installed
+
+- name: Check if ufw status is active.
+  ansible.builtin.command: ufw status
+  changed_when: False
+  register: ufw_status
+  when: ufw_installed.stat.exists
+
+
+# Update and install the base software
+- name: Update apt package cache.
+  apt:
+    update_cache: yes
+    cache_valid_time: 600
+
+- name: Upgrade installed apt packages.
+  apt:
+    upgrade: dist
+  register: upgrade
+
+- name: Ensure that a base set of software packages are installed.
+  apt:
+    pkg:
+      - build-essential
+      - curl
+      - fail2ban
+      - git
+      - htop
+      - needrestart
+      - net-tools
+      - rsync
+      - sudo
+      - unzip
+      - python3-pip
+    state: latest
+
+- name: Check if a reboot is needed for Debian-based systems
+  stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+
+- name: Set timezone.
+  timezone:
+    name: "{{ tmzone }}"
+  notify:
+    - restart cron
+
+- name: Configure user .vimrc.
+  copy:
+    dest: /home/{{ user }}/.vimrc
+    content: "{{ vimrc }}"
+    owner: "{{ user }}"
+    group: "{{ user }}"
+    mode: 0644
+
+- name: Configure root .vimrc.
+  copy:
+    dest: /root/.vimrc
+    content: "{{ vimrc }}"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Configure user 2-line prompt and .bashrc aliases.
+  blockinfile:
+    path: /home/{{ user }}/.bashrc
+    block: |
+      PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\n\$ '
+      alias l='ls -CF'
+      alias la='ls -AF'
+      alias ll='ls -alF'
+
+- name: Configure root 2-line prompt and .bashrc aliases.
+  blockinfile:
+    path: /root/.bashrc
+    block: |
+      PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\n\$ ' 
+      export LS_OPTIONS='--color=auto'
+      eval "`dircolors`"
+      alias ls='ls $LS_OPTIONS'
+      alias l='ls -CF'
+      alias la='ls -AF'
+      alias ll='ls -alF'
+
+- name: Configure fail2ban local jail.
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart fail2ban
+
+- name: Reboot the server if needed.
+  reboot:
+    msg: "Reboot initiated by Ansible because of reboot required file."
+    connect_timeout: 5
+    reboot_timeout: 600
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+    test_command: whoami
+  when: reboot_required.stat.exists
+
+- name: Remove "awscli" package
+  apt:
+    name: awscli
+    state: absent
+
+- name: Remove old packages from the cache.
+  apt:
+    autoclean: yes
+
+- name: Remove dependencies that are no longer needed.
+  apt:
+    autoremove: yes
+    purge: yes
+
+- name: Install AWS CLI v2 python package
+  pip:
+    name: awscli
+  become_user: "{{ user }}" 

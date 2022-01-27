@@ -1,0 +1,12 @@
+---
+- name: restart cron
+  service:
+    name: cron
+    state: restarted
+  when: reboot_required.stat.exists == false
+
+- name: restart fail2ban
+  service:
+    name: fail2ban
+    state: restarted
+  when: reboot_required.stat.exists == false

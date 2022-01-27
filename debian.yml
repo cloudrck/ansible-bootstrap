@@ -1,0 +1,12 @@
+# Initial server setup
+#
+---
+- hosts: testhost
+  vars:
+    tmzone: America/Chicago
+    sudo_timeout: 20
+    vimrc: |
+      set mouse-=a
+  roles:
+    - bootstrap
+    - {role: jnv.unattended-upgrades, ansible_become: yes}
